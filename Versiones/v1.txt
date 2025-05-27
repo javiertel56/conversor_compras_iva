@@ -1,0 +1,99 @@
+import tkinter as tk
+from tkinter import ttk, messagebox
+
+class App(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title("Inventario Tiendas")
+        self.geometry("700x500")
+        self.configure(bg="#23272e")
+        self.create_tabs()
+
+    def create_tabs(self):
+        style = ttk.Style(self)
+        style.theme_use('clam')
+
+        dark_bg = "#23272e"
+        dark_fg = "#f5f6fa"
+        tab_bg = "#2c313c"
+        tab_active = "#353b48"
+
+        style.configure('TNotebook', background=dark_bg, borderwidth=0)
+        style.configure('TNotebook.Tab', background=tab_bg, foreground=dark_fg, font=('Segoe UI', 12, 'bold'), padding=[10, 5])
+        style.map('TNotebook.Tab',
+                  background=[('selected', tab_active)],
+                  foreground=[('selected', '#00b894')])
+
+        style.configure('TFrame', background=dark_bg)
+        style.configure('TLabel', background=dark_bg, foreground=dark_fg, font=('Segoe UI', 10))
+
+        style.configure('Blue.TButton',
+                        background='#2980b9',
+                        foreground='white',
+                        borderwidth=0,
+                        font=('Segoe UI', 11, 'bold'),
+                        padding=10,
+                        relief='flat')
+        style.map('Blue.TButton',
+                  background=[('active', '#1c5980')],
+                  foreground=[('active', 'white')])
+
+        style.configure('Yellow.TButton',
+                        background='#fdcb6e',
+                        foreground='#23272e',
+                        borderwidth=0,
+                        font=('Segoe UI', 11, 'bold'),
+                        padding=10,
+                        relief='flat')
+        style.map('Yellow.TButton',
+                  background=[('active', '#e1b84b')],
+                  foreground=[('active', '#23272e')])
+
+        style.configure('Green.TButton',
+                        background='#00b894',
+                        foreground='white',
+                        borderwidth=0,
+                        font=('Segoe UI', 11, 'bold'),
+                        padding=10,
+                        relief='flat')
+        style.map('Green.TButton',
+                  background=[('active', '#00916e')],
+                  foreground=[('active', 'white')])
+
+        notebook = ttk.Notebook(self)
+        notebook.pack(expand=1, fill='both', padx=20, pady=20)
+
+        rm_frame = ttk.Frame(notebook)
+        tco_frame = ttk.Frame(notebook)
+
+        notebook.add(rm_frame, text='Rosa Marcela')
+        notebook.add(tco_frame, text='Tcomunicamos')
+
+        self.create_tab_content(rm_frame, "Tabulador iva - Rosa Marcela")
+        self.create_tab_content(tco_frame, "Tabulador iva - Tcomunicamos")
+
+    def create_tab_content(self, frame, titulo):
+        lbl_titulo = ttk.Label(frame, text=titulo, background="#23272e", foreground="#f5f6fa", font=('Segoe UI', 16, 'bold'))
+        lbl_titulo.pack(pady=(10, 20))
+
+        btn_frame = tk.Frame(frame, bg="#23272e")
+        btn_frame.pack(pady=10)
+
+        def on_click(nombre):
+            messagebox.showinfo("Botón", f"Click en el botón {nombre}")
+
+        lbl_file = ttk.Label(frame, text="Archivo seleccionado:", background="#23272e", foreground="#f5f6fa", font=('Segoe UI', 10))
+        lbl_file.pack(pady=(10, 20))
+
+        btn_subir = ttk.Button(btn_frame, text="Subir archivo", style="Blue.TButton", command=lambda: on_click("Subir archivo"))
+        btn_subir.pack(side=tk.LEFT, padx=10)
+
+        btn_procesar = ttk.Button(btn_frame, text="Procesar Excel", style="Yellow.TButton", command=lambda: on_click("Procesar Excel"))
+        btn_procesar.pack(side=tk.LEFT, padx=10)
+
+        btn_abrir = ttk.Button(btn_frame, text="Abrir archivo", style="Green.TButton", command=lambda: on_click("Abrir archivo"))
+        btn_abrir.pack(side=tk.LEFT, padx=10)
+
+if __name__ == "__main__":
+    app = App()
+    app.mainloop()
