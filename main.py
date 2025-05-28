@@ -205,6 +205,24 @@ def convertir_excel(origen, destino):
             else:
                 concepto = nombre
 
+            # --- NUEVO: Busca la fila de IVA asociada (cuenta inicia con 1104-) ---
+            abono_iva_16 = 0.0
+            abono_iva_8 = 0.0
+            j = i + 1
+            while j < len(df):
+                iva_row = df.iloc[j]
+                if pd.notna(iva_row[2]) and isinstance(iva_row[2], str) and iva_row[2].startswith("1104-"):
+                    iva_valor = limpiar_valor(iva_row[6]) if len(iva_row) > 6 else 0.0
+                    # Solo toma el primer IVA que encuentre, sea 16 o 8, y sale del ciclo
+                    if iva_row[2].endswith("-01"):
+                        abono_iva_16 = iva_valor
+                        abono_iva_8 = 0.0
+                    elif iva_row[2].endswith("-02"):
+                        abono_iva_8 = iva_valor
+                        abono_iva_16 = 0.0
+                    break
+                j += 1
+
             # Agrupa por referencia y concepto (solo para la cuenta principal, ignora otras cuentas)
             clave = (referencia, concepto)
             if clave not in agrupados:
@@ -215,10 +233,14 @@ def convertir_excel(origen, destino):
                     "concepto": concepto,
                     "nombre": nombre,
                     "cargos": 0.0,
-                    "abonos": 0.0
+                    "abonos": 0.0,
+                    "abono_iva_16": 0.0,
+                    "abono_iva_8": 0.0
                 }
             agrupados[clave]["cargos"] += cargo
             agrupados[clave]["abonos"] += abono
+            agrupados[clave]["abono_iva_16"] += abono_iva_16
+            agrupados[clave]["abono_iva_8"] += abono_iva_8
         i += 1
 
     # Antes de procesar movimientos, crea un set con referencias que tienen IVA 8%
@@ -251,19 +273,15 @@ def convertir_excel(origen, destino):
         if cuenta_str.startswith("1104-"):
             if cuenta_str.endswith("-01"):
                 cargo_16 = abs(v["cargos"])
-                abono_16 = round(abs(v["cargos"]) * 0.16, 2) if v["cargos"] > 0 else 0.00
+                abono_16 = abs(v["abonos"])
             elif cuenta_str.endswith("-02"):
                 cargo_8 = abs(v["cargos"])
-                abono_8 = round(abs(v["cargos"]) * 0.08, 2) if v["cargos"] > 0 else 0.00
-        elif v["referencia"] in referencias_iva_8:
-            cargo_8 = abs(v["cargos"])
-            abono_8 = round(abs(v["cargos"]) * 0.08, 2) if v["cargos"] > 0 else 0.00
-        elif "8%" in concepto_str or "8%" in nombre_str:
-            cargo_8 = abs(v["cargos"])
-            abono_8 = round(abs(v["cargos"]) * 0.08, 2) if v["cargos"] > 0 else 0.00
+                abono_8 = abs(v["abonos"])
         else:
-            cargo_16 = abs(v["cargos"])
-            abono_16 = round(abs(v["cargos"]) * 0.16, 2) if v["cargos"] > 0 else 0.00
+            cargo_16 = abs(v["cargos"]) if v.get("abono_iva_16", 0.0) > 0 else 0.0
+            abono_16 = abs(v.get("abono_iva_16", 0.0))
+            cargo_8 = abs(v["cargos"]) if v.get("abono_iva_8", 0.0) > 0 else 0.0
+            abono_8 = abs(v.get("abono_iva_8", 0.0))
 
         # Redondear a dos decimales para mostrar en Excel
         cargo_16 = round(cargo_16, 2)
@@ -298,20 +316,22 @@ def convertir_excel(origen, destino):
         'Fórmula 16', 'Fórmula 8'
     ]
     with pd.ExcelWriter(destino, engine='openpyxl') as writer:
+        # Hoja 1: Excel original, pero separado por líneas de movimientos
+        df.to_excel(writer, index=False, header=False, sheet_name='Hoja1')
+        # Hoja 2: Lo que era Sheet1 (movimientos procesados)
         df_mov = pd.DataFrame(movimientos, columns=columnas)
-        df_mov.to_excel(writer, index=False, sheet_name='Sheet1')
+        df_mov.to_excel(writer, index=False, sheet_name='Hoja2')
+        # Hoja 3: Lo que era Sheet3 (hoja3)
         if hoja3:
             df_hoja3 = pd.DataFrame(hoja3, columns=columnas)
-            df_hoja3.to_excel(writer, index=False, sheet_name='Sheet3')
-    # writer.save()  # <-- Elimina o comenta esta línea
+            df_hoja3.to_excel(writer, index=False, sheet_name='Hoja3')
 
-    # Agregar fórmulas en Excel y formato de dos decimales
+    # Formato y fórmulas solo para Hoja2 y Hoja3
     wb = openpyxl.load_workbook(destino)
-    # Definir colores
     gris_suave = PatternFill(start_color="D9D9D9", end_color="D9D9D9", fill_type="solid")  # Gris claro
     pastel = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")      # Verde pastel suave
 
-    for sheet_name in ['Sheet1', 'Sheet3']:
+    for sheet_name in ['Hoja2', 'Hoja3']:
         if sheet_name in wb.sheetnames:
             ws = wb[sheet_name]
             max_row = ws.max_row
@@ -341,8 +361,6 @@ def convertir_excel(origen, destino):
             for idx, col in enumerate(['F', 'G', 'H', 'I'], start=6):
                 ws[f'{chr(64+idx)}{suma_row}'] = f"=SUM({chr(64+idx)}2:{chr(64+idx)}{max_row})"
                 ws[f'{chr(64+idx)}{suma_row}'].number_format = '0.00'
-                # Si el total es cero, poner en blanco
-                # (Esto solo aplica visualmente después de abrir el archivo en Excel)
 
             # Pintar la fila de totales de fórmulas de gris suave
             ws[f'J{suma_row}'].fill = gris_suave
