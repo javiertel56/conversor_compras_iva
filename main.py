@@ -1,3 +1,8 @@
+# Este programa es una aplicación de escritorio con interfaz gráfica (Tkinter) para procesar archivos de Excel
+# relacionados con movimientos contables y cálculo de IVA. Permite seleccionar un archivo, procesarlo para
+# extraer y calcular los IVAs asociados (solo el más cercano, nunca ambos), y exportar el resultado a un nuevo Excel.
+# El resultado solo incluye movimientos con IVA, y el formato de salida es amigable para revisión y cálculo.
+
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import pandas as pd
@@ -5,19 +10,22 @@ import openpyxl
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Font, Alignment, PatternFill, Color, numbers
 
+# Clase principal de la aplicación gráfica
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("Inventario Tiendas")
-        self.geometry("700x500")
-        self.configure(bg="#1c2c47")
-        self.selected_file = None
-        self.create_tabs()
+        self.title("Inventario Tiendas")  # Título de la ventana
+        self.geometry("700x500")         # Tamaño de la ventana
+        self.configure(bg="#1c2c47")     # Color de fondo
+        self.selected_file = None        # Archivo seleccionado por el usuario
+        self.create_tabs()               # Crea las pestañas de la interfaz
 
+    # Configura el estilo y las pestañas de la aplicación
     def create_tabs(self):
         style = ttk.Style(self)
         style.theme_use('clam')
 
+        # Colores y estilos personalizados para la interfaz
         dark_bg = "#1c2c47"
         dark_fg = "#f5f6fa"
         tab_bg = "#1c2c47"
@@ -26,12 +34,13 @@ class App(tk.Tk):
         style.configure('TNotebook', background=dark_bg, borderwidth=0)
         style.configure('TNotebook.Tab', background=tab_bg, foreground=dark_fg, font=('Segoe UI', 12, 'bold'), padding=[10, 5])
         style.map('TNotebook.Tab',
-                  background=[('selected', tab_active)],
-                  foreground=[('selected', '#00b894')])
+                    background=[('selected', tab_active)],
+                foreground=[('selected', '#00b894')])
 
         style.configure('TFrame', background=dark_bg)
         style.configure('TLabel', background=dark_bg, foreground=dark_fg, font=('Segoe UI', 10))
 
+        # Estilos para los botones
         style.configure('Blue.TButton',
                         background='#2980b9',
                         foreground='white',
@@ -40,8 +49,8 @@ class App(tk.Tk):
                         padding=10,
                         relief='flat')
         style.map('Blue.TButton',
-                  background=[('active', '#1c5980')],
-                  foreground=[('active', 'white')])
+                background=[('active', '#1c5980')],
+                foreground=[('active', 'white')])
 
         style.configure('Yellow.TButton',
                         background='#fdcb6e',
@@ -51,8 +60,8 @@ class App(tk.Tk):
                         padding=10,
                         relief='flat')
         style.map('Yellow.TButton',
-                  background=[('active', '#e1b84b')],
-                  foreground=[('active', '#1c2c47')])
+                background=[('active', '#e1b84b')],
+                foreground=[('active', '#1c2c47')])
 
         style.configure('Green.TButton',
                         background='#00b894',
@@ -62,9 +71,10 @@ class App(tk.Tk):
                         padding=10,
                         relief='flat')
         style.map('Green.TButton',
-                  background=[('active', '#00916e')],
-                  foreground=[('active', 'white')])
+                background=[('active', '#00916e')],
+                foreground=[('active', 'white')])
 
+        # Crea las pestañas principales
         notebook = ttk.Notebook(self)
         notebook.pack(expand=1, fill='both', padx=20, pady=20)
 
@@ -74,9 +84,11 @@ class App(tk.Tk):
         notebook.add(rm_frame, text='Rosa Marcela')
         notebook.add(tco_frame, text='Tcomunicamos')
 
+        # Crea el contenido de cada pestaña
         self.create_tab_content(rm_frame, "Tabulador iva - Rosa Marcela")
         self.create_tab_content(tco_frame, "Tabulador iva - Tcomunicamos")
 
+    # Crea los botones y etiquetas de cada pestaña
     def create_tab_content(self, frame, titulo):
         lbl_titulo = ttk.Label(frame, text=titulo, background="#1c2c47", foreground="#f5f6fa", font=('Segoe UI', 16, 'bold'))
         lbl_titulo.pack(pady=(10, 20))
@@ -87,12 +99,14 @@ class App(tk.Tk):
         lbl_file = ttk.Label(frame, text="Archivo seleccionado: Ninguno", background="#1c2c47", foreground="#f5f6fa", font=('Segoe UI', 10))
         lbl_file.pack(pady=(10, 20))
 
+        # Función para seleccionar archivo de Excel
         def subir_archivo():
             file_path = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx;*.xls")])
             if file_path:
                 self.selected_file = file_path
                 lbl_file.config(text=f"Archivo seleccionado: {file_path}")
 
+        # Procesa el archivo seleccionado y guarda el resultado
         def procesar_excel():
             if not self.selected_file:
                 messagebox.showwarning("Advertencia", "Primero selecciona un archivo.")
@@ -107,14 +121,15 @@ class App(tk.Tk):
             except Exception as e:
                 messagebox.showerror("Error", f"Ocurrió un error: {e}")
 
+        # Abre el archivo procesado en Excel
         def abrir_archivo():
-            # Abre el archivo procesado, no el original
             if hasattr(self, 'archivo_procesado') and self.archivo_procesado:
                 import os
                 os.startfile(self.archivo_procesado)
             else:
                 messagebox.showwarning("Advertencia", "Primero procesa y guarda un archivo.")
 
+        # Botones de la interfaz
         btn_subir = ttk.Button(btn_frame, text="Subir archivo", style="Blue.TButton", command=subir_archivo)
         btn_subir.pack(side=tk.LEFT, padx=10)
 
@@ -124,6 +139,7 @@ class App(tk.Tk):
         btn_abrir = ttk.Button(btn_frame, text="Abrir archivo", style="Green.TButton", command=abrir_archivo)
         btn_abrir.pack(side=tk.LEFT, padx=10)
 
+# Limpia y convierte valores a float, útil para columnas numéricas
 def limpiar_valor(valor):
     if pd.isna(valor):
         return 0.0
@@ -132,12 +148,12 @@ def limpiar_valor(valor):
     except Exception:
         return 0.0
 
+# Ajusta el formato del archivo Excel de salida: anchos, colores, formatos numéricos
 def ajustar_formato_excel(ruta_archivo):
     wb = openpyxl.load_workbook(ruta_archivo)
     azul = PatternFill(start_color="2980b9", end_color="2980b9", fill_type="solid")
-    # blanco = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")  # Ya no se usa
     for ws in wb.worksheets:
-        # Ajustar ancho de columnas
+        # Ajusta el ancho de columnas según el contenido
         for col in ws.columns:
             max_length = 0
             col_letter = get_column_letter(col[0].column)
@@ -155,10 +171,10 @@ def ajustar_formato_excel(ruta_archivo):
             cell.alignment = Alignment(horizontal="center")
             cell.fill = azul
 
-        # Congelar la primera fila
+        # Congela la primera fila
         ws.freeze_panes = "A2"
 
-        # Formato numérico y pintar de blanco los ceros en columnas de dinero e IVA
+        # Formato numérico y pinta de blanco los ceros en columnas de dinero e IVA
         header = [cell.value for cell in ws[1]]
         cols_dinero = []
         for nombre in ['Cargo 16', 'Abono 16', 'Cargo 8', 'Abono 8']:
@@ -170,10 +186,10 @@ def ajustar_formato_excel(ruta_archivo):
                 cell.number_format = numbers.FORMAT_NUMBER_COMMA_SEPARATED1
                 if cell.value == 0 or cell.value == 0.0:
                     cell.font = Font(color="FFFFFF")  # Solo texto blanco
-                    # cell.fill = blanco  # Elimina o comenta esta línea
 
     wb.save(ruta_archivo)
 
+# Procesa el archivo Excel, calcula IVAs y genera el archivo de salida
 def convertir_excel(origen, destino):
     # Lee el archivo original
     df = pd.read_excel(origen, header=None)
@@ -205,7 +221,7 @@ def convertir_excel(origen, destino):
             else:
                 concepto = nombre
 
-            # --- NUEVO: Busca la fila de IVA asociada (cuenta inicia con 1104-) ---
+            # Busca SOLO el primer IVA (el más cercano, sea 16 o 8, nunca ambos)
             abono_iva_16 = 0.0
             abono_iva_8 = 0.0
             j = i + 1
@@ -213,42 +229,35 @@ def convertir_excel(origen, destino):
                 iva_row = df.iloc[j]
                 if pd.notna(iva_row[2]) and isinstance(iva_row[2], str) and iva_row[2].startswith("1104-"):
                     iva_valor = limpiar_valor(iva_row[6]) if len(iva_row) > 6 else 0.0
-                    # Solo toma el primer IVA que encuentre, sea 16 o 8, y sale del ciclo
                     if iva_row[2].endswith("-01"):
                         abono_iva_16 = iva_valor
                         abono_iva_8 = 0.0
                     elif iva_row[2].endswith("-02"):
                         abono_iva_8 = iva_valor
                         abono_iva_16 = 0.0
-                    break
+                    break  # Solo el primer IVA encontrado
                 j += 1
 
-            # Agrupa por referencia y concepto (solo para la cuenta principal, ignora otras cuentas)
-            clave = (referencia, concepto)
-            if clave not in agrupados:
-                agrupados[clave] = {
-                    "numero": numero,
-                    "referencia": referencia,
-                    "cuenta": cuenta,
-                    "concepto": concepto,
-                    "nombre": nombre,
-                    "cargos": 0.0,
-                    "abonos": 0.0,
-                    "abono_iva_16": 0.0,
-                    "abono_iva_8": 0.0
-                }
-            agrupados[clave]["cargos"] += cargo
-            agrupados[clave]["abonos"] += abono
-            agrupados[clave]["abono_iva_16"] += abono_iva_16
-            agrupados[clave]["abono_iva_8"] += abono_iva_8
+            # Solo agrega si hay IVA (en abono_iva_16 o abono_iva_8)
+            if abono_iva_16 > 0 or abono_iva_8 > 0:
+                clave = (referencia, concepto)
+                if clave not in agrupados:
+                    agrupados[clave] = {
+                        "numero": numero,
+                        "referencia": referencia,
+                        "cuenta": cuenta,
+                        "concepto": concepto,
+                        "nombre": nombre,
+                        "cargos": 0.0,
+                        "abonos": 0.0,
+                        "abono_iva_16": 0.0,
+                        "abono_iva_8": 0.0
+                    }
+                agrupados[clave]["cargos"] += cargo
+                agrupados[clave]["abonos"] += abono
+                agrupados[clave]["abono_iva_16"] += abono_iva_16
+                agrupados[clave]["abono_iva_8"] += abono_iva_8
         i += 1
-
-    # Antes de procesar movimientos, crea un set con referencias que tienen IVA 8%
-    referencias_iva_8 = set()
-    for v in agrupados.values():
-        cuenta_str = str(v["cuenta"]).lower() if v["cuenta"] else ""
-        if cuenta_str.startswith("1104-") and cuenta_str.endswith("-02"):
-            referencias_iva_8.add(v["referencia"])
 
     # Procesa movimientos para hojas
     for v in agrupados.values():
@@ -256,6 +265,7 @@ def convertir_excel(origen, destino):
         concepto_str = str(v["concepto"]).lower() if v["concepto"] else ""
         nombre_str = str(v["nombre"]).lower() if v["nombre"] else ""
         cuenta_str = str(v["cuenta"]).lower() if v["cuenta"] else ""
+        # Filtra movimientos que no deben incluirse (ejemplo: nómina, IMSS, etc.)
         if (
             "finiquito" in referencia_str or
             "nomina" in referencia_str or
@@ -270,17 +280,12 @@ def convertir_excel(origen, destino):
 
         cargo_16 = abono_16 = cargo_8 = abono_8 = 0.0
 
-        if cuenta_str.startswith("1104-"):
-            if cuenta_str.endswith("-01"):
-                cargo_16 = abs(v["cargos"])
-                abono_16 = abs(v["abonos"])
-            elif cuenta_str.endswith("-02"):
-                cargo_8 = abs(v["cargos"])
-                abono_8 = abs(v["abonos"])
-        else:
-            cargo_16 = abs(v["cargos"]) if v.get("abono_iva_16", 0.0) > 0 else 0.0
+        # Solo uno de los dos, nunca ambos
+        if v.get("abono_iva_16", 0.0) > 0:
+            cargo_16 = abs(v["cargos"])
             abono_16 = abs(v.get("abono_iva_16", 0.0))
-            cargo_8 = abs(v["cargos"]) if v.get("abono_iva_8", 0.0) > 0 else 0.0
+        elif v.get("abono_iva_8", 0.0) > 0:
+            cargo_8 = abs(v["cargos"])
             abono_8 = abs(v.get("abono_iva_8", 0.0))
 
         # Redondear a dos decimales para mostrar en Excel
@@ -289,8 +294,7 @@ def convertir_excel(origen, destino):
         cargo_8 = round(cargo_8, 2)
         abono_8 = round(abono_8, 2)
 
-        # Fórmulas Excel (referencias de columna: F=6, G=7, H=8, I=9)
-        # Ejemplo: =F2*0.16-G2
+        # Prepara la fila para el Excel de salida
         fila = [
             v["numero"], v["referencia"], v["cuenta"], v["concepto"], v["nombre"],
             cargo_16, abono_16, cargo_8, abono_8,
@@ -298,18 +302,11 @@ def convertir_excel(origen, destino):
         ]
         if v["numero"] == 2:
             hoja3.append(fila)
-        if (
-            v["cargos"] > 0 and
-            isinstance(v["cuenta"], str) and (
-                v["cuenta"].startswith("1102-") or
-                v["cuenta"].startswith("5100-") or
-                v["cuenta"].startswith("5200-") or
-                v["cuenta"].startswith("61000-") or
-                v["cuenta"].startswith("1201-")
-            )
-        ):
+        # Solo agrega si hay IVA (en abono_16 o abono_8)
+        if abono_16 > 0 or abono_8 > 0:
             movimientos.append(fila)
 
+    # Define los nombres de las columnas de salida
     columnas = [
         'No.', 'Refer.', 'Cuenta', 'Concepto', 'Nombre',
         'Cargo 16', 'Abono 16', 'Cargo 8', 'Abono 8',
@@ -318,10 +315,10 @@ def convertir_excel(origen, destino):
     with pd.ExcelWriter(destino, engine='openpyxl') as writer:
         # Hoja 1: Excel original, pero separado por líneas de movimientos
         df.to_excel(writer, index=False, header=False, sheet_name='Hoja1')
-        # Hoja 2: Lo que era Sheet1 (movimientos procesados)
+        # Hoja 2: Movimientos procesados con IVA
         df_mov = pd.DataFrame(movimientos, columns=columnas)
         df_mov.to_excel(writer, index=False, sheet_name='Hoja2')
-        # Hoja 3: Lo que era Sheet3 (hoja3)
+        # Hoja 3: (opcional) otra hoja con movimientos especiales
         if hoja3:
             df_hoja3 = pd.DataFrame(hoja3, columns=columnas)
             df_hoja3.to_excel(writer, index=False, sheet_name='Hoja3')
@@ -369,6 +366,7 @@ def convertir_excel(origen, destino):
     wb.save(destino)
     ajustar_formato_excel(destino)
 
+# Punto de entrada de la aplicación
 if __name__ == "__main__":
     app = App()
     app.mainloop()
