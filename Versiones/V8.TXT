@@ -5,6 +5,65 @@ import openpyxl
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Font, Alignment, PatternFill, Color, numbers
 
+def obtener_nombre(df, i):
+    """
+    Obtiene el nombre que está debajo del movimiento principal y arriba del IVA.
+    """
+    row = df.iloc[i]
+    nombre = ""
+    nombre_encontrado = False
+    j = i + 1
+    while j < len(df):
+        next_row = df.iloc[j]
+        # Si encontramos una fila de IVA, paramos
+        if pd.notna(next_row[2]) and isinstance(next_row[2], str) and (
+            "IVA" in next_row[4] if len(next_row) > 4 and pd.notna(next_row[4]) else False
+        ):
+            break
+        # Si la columna 3 (nombre) tiene valor y no es una fila de cuenta, lo tomamos como nombre
+        if pd.notna(next_row[3]) and (pd.isna(next_row[2]) or not (isinstance(next_row[2], str) and '-' in next_row[2])):
+            nombre = next_row[3]
+            nombre_encontrado = True
+            break
+        j += 1
+    if not nombre_encontrado:
+        nombre = row[3] if pd.notna(row[3]) else ""
+    return nombre
+
+def obtener_valor_iva(df, i):
+    """
+    Busca la fila de IVA asociada y devuelve (valor_iva, tipo_iva: '8' o '16').
+    """
+    for k in range(1, 6):
+        if i + k < len(df):
+            fila_check = df.iloc[i + k]
+            cuenta_check = str(fila_check[2]) if pd.notna(fila_check[2]) else ""
+            concepto_check = str(fila_check[4]) if len(fila_check) > 4 and pd.notna(fila_check[4]) else ""
+            valor_iva = limpiar_valor(fila_check[6]) if len(fila_check) > 6 else 0.0
+            if cuenta_check.startswith("1104-"):
+                if cuenta_check.endswith("-02") or "8%" in cuenta_check or "8%" in concepto_check:
+                    return valor_iva, '8'
+                if cuenta_check.endswith("-01") or "16%" in cuenta_check or "16%" in concepto_check:
+                    return valor_iva, '16'
+    return 0.0, '16'
+
+def obtener_tipo_iva(df, i):
+    """
+    Busca en las siguientes filas si hay cuenta de IVA 8% (-02 o 8%) o 16% (-01 o 16%).
+    Devuelve '8' o '16'.
+    """
+    for k in range(1, 6):
+        if i + k < len(df):
+            fila_check = df.iloc[i + k]
+            cuenta_check = str(fila_check[2]) if pd.notna(fila_check[2]) else ""
+            concepto_check = str(fila_check[4]) if len(fila_check) > 4 and pd.notna(fila_check[4]) else ""
+            if cuenta_check.endswith("-02") or "8%" in cuenta_check or "8%" in concepto_check:
+                return '8'
+            if cuenta_check.endswith("-01") or "16%" in cuenta_check or "16%" in concepto_check:
+                return '16'
+    return '16'
+
+
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -179,18 +238,21 @@ def convertir_excel(origen, destino):
     df = pd.read_excel(origen, header=None)
     movimientos = []
     hoja3 = []
-    agrupados = {}
+    # Eliminamos el diccionario agrupados ya que no agruparemos por referencia/concepto
+    # agrupados = {}
 
     i = 0
     while i < len(df):
         row = df.iloc[i]
-        # Detecta fila de movimiento principal (tiene número, referencia y cuenta)
+        # Detecta fila de movimiento principal (usando el criterio original para identificar filas con cuenta)
         if pd.notna(row[0]) and pd.notna(row[2]) and isinstance(row[2], str) and '-' in row[2]:
             numero = row[0]
             referencia = row[1]
             cuenta = row[2]
-            nombre = row[3] if pd.notna(row[3]) else ""
+            nombre = obtener_nombre(df, i)
+            valor_iva, tipo_iva = obtener_valor_iva(df, i)
             concepto = ""
+            # Usamos el cargo de la fila actual, no el total agrupado
             cargo = limpiar_valor(row[6]) if len(row) > 6 else 0.0
             abono = limpiar_valor(row[7]) if len(row) > 7 else 0.0
 
@@ -199,98 +261,66 @@ def convertir_excel(origen, destino):
                 next_row = df.iloc[i + 1]
                 if pd.isna(next_row[2]) and pd.notna(next_row[4]):
                     concepto = str(next_row[4])
-                    i += 1  # Salta la fila de concepto
+                    # No incrementamos i aquí porque la lógica de obtener_nombre y obtener_valor_iva ya maneja las filas siguientes
                 else:
                     concepto = nombre
             else:
                 concepto = nombre
 
-            # Agrupa por referencia y concepto (solo para la cuenta principal, ignora otras cuentas)
-            clave = (referencia, concepto)
-            if clave not in agrupados:
-                agrupados[clave] = {
-                    "numero": numero,
-                    "referencia": referencia,
-                    "cuenta": cuenta,
-                    "concepto": concepto,
-                    "nombre": nombre,
-                    "cargos": 0.0,
-                    "abonos": 0.0
-                }
-            agrupados[clave]["cargos"] += cargo
-            agrupados[clave]["abonos"] += abono
-        i += 1
+            # Ahora procesamos la fila directamente sin agrupar
+            # Aplicamos la lógica de clasificación de IVA basada en el tipo_iva encontrado
+            cargo_16 = abono_16 = cargo_8 = abono_8 = 0.0
 
-    # Antes de procesar movimientos, crea un set con referencias que tienen IVA 8%
-    referencias_iva_8 = set()
-    for v in agrupados.values():
-        cuenta_str = str(v["cuenta"]).lower() if v["cuenta"] else ""
-        if cuenta_str.startswith("1104-") and cuenta_str.endswith("-02"):
-            referencias_iva_8.add(v["referencia"])
+            if tipo_iva == '8':
+                cargo_8 = round(cargo, 2) # Usamos el cargo de la fila actual
+                abono_8 = round(valor_iva, 2) # Usamos el valor_iva encontrado
+            else: # Assume 16% if not 8%
+                cargo_16 = round(cargo, 2) # Usamos el cargo de la fila actual
+                abono_16 = round(valor_iva, 2) # Usamos el valor_iva encontrado
 
-    # Procesa movimientos para hojas
-    for v in agrupados.values():
-        referencia_str = str(v["referencia"]).lower() if v["referencia"] else ""
-        concepto_str = str(v["concepto"]).lower() if v["concepto"] else ""
-        nombre_str = str(v["nombre"]).lower() if v["nombre"] else ""
-        cuenta_str = str(v["cuenta"]).lower() if v["cuenta"] else ""
-        if (
-            "finiquito" in referencia_str or
-            "nomina" in referencia_str or
-            "sueldos y salarios" in concepto_str or
-            "sueldos y salarios" in nombre_str or
-            "imss" in concepto_str or
-            "imss" in nombre_str or
-            "comprobante sin requisitos" in concepto_str or
-            "comprobante sin requisitos" in nombre_str
-        ):
-            continue
 
-        cargo_16 = abono_16 = cargo_8 = abono_8 = 0.0
+            # Filtra movimientos no deseados (finiquito, nomina, etc.)
+            referencia_str = str(referencia).lower() if referencia else ""
+            concepto_str = str(concepto).lower() if concepto else ""
+            nombre_str = str(nombre).lower() if nombre else ""
 
-        if cuenta_str.startswith("1104-"):
-            if cuenta_str.endswith("-01"):
-                cargo_16 = abs(v["cargos"])
-                abono_16 = round(abs(v["cargos"]) * 0.16, 2) if v["cargos"] > 0 else 0.00
-            elif cuenta_str.endswith("-02"):
-                cargo_8 = abs(v["cargos"])
-                abono_8 = round(abs(v["cargos"]) * 0.08, 2) if v["cargos"] > 0 else 0.00
-        elif v["referencia"] in referencias_iva_8:
-            cargo_8 = abs(v["cargos"])
-            abono_8 = round(abs(v["cargos"]) * 0.08, 2) if v["cargos"] > 0 else 0.00
-        elif "8%" in concepto_str or "8%" in nombre_str:
-            cargo_8 = abs(v["cargos"])
-            abono_8 = round(abs(v["cargos"]) * 0.08, 2) if v["cargos"] > 0 else 0.00
-        else:
-            cargo_16 = abs(v["cargos"])
-            abono_16 = round(abs(v["cargos"]) * 0.16, 2) if v["cargos"] > 0 else 0.00
+            if (
+                "finiquito" in referencia_str or
+                "nomina" in referencia_str or
+                "sueldos y salarios" in concepto_str or
+                "sueldos y salarios" in nombre_str or
+                "imss" in concepto_str or
+                "imss" in nombre_str or
+                "comprobante sin requisitos" in concepto_str or
+                "comprobante sin requisitos" in nombre_str
+            ):
+                i += 1 # Move to the next row
+                continue # Skip this row
 
-        # Redondear a dos decimales para mostrar en Excel
-        cargo_16 = round(cargo_16, 2)
-        abono_16 = round(abono_16, 2)
-        cargo_8 = round(cargo_8, 2)
-        abono_8 = round(abono_8, 2)
+            fila = [
+                numero, referencia, cuenta, nombre,
+                cargo_16, abono_16, cargo_8, abono_8,
+                None, None  # Las fórmulas se agregan después
+            ]
 
-        # Fórmulas Excel (referencias de columna: F=6, G=7, H=8, I=9)
-        # Ejemplo: =F2*0.16-G2
-        fila = [
-            v["numero"], v["referencia"], v["cuenta"], v["nombre"],
-            cargo_16, abono_16, cargo_8, abono_8,
-            None, None  # Las fórmulas se agregan después
-        ]
-        if v["numero"] == 2:
-            hoja3.append(fila)
-        if (
-            v["cargos"] > 0 and
-            isinstance(v["cuenta"], str) and (
-                v["cuenta"].startswith("1102-") or
-                v["cuenta"].startswith("5100-") or
-                v["cuenta"].startswith("5200-") or
-                v["cuenta"].startswith("61000-") or
-                v["cuenta"].startswith("1201-")
-            )
-        ):
-            movimientos.append(fila)
+            # Decide a qué hoja agregar la fila
+            if numero == 2:
+                hoja3.append(fila)
+            # Agrega a movimientos si cumple los criterios de cuenta, cargo > 0 Y valor_iva > 0
+            elif (
+                cargo > 0 and
+                valor_iva > 0.0 and  # **NUEVA CONDICIÓN: Solo incluir si hay IVA**
+                isinstance(cuenta, str) and (
+                    cuenta.startswith("1102-") or
+                    cuenta.startswith("5100-") or
+                    cuenta.startswith("5200-") or
+                    cuenta.startswith("61000-") or
+                    cuenta.startswith("1201-")
+                )
+            ):
+                movimientos.append(fila)
+
+        i += 1 # Move to the next row
 
     columnas = [
         'No.', 'Refer.', 'Cuenta', 'Nombre',
@@ -303,7 +333,6 @@ def convertir_excel(origen, destino):
         if hoja3:
             df_hoja3 = pd.DataFrame(hoja3, columns=columnas)
             df_hoja3.to_excel(writer, index=False, sheet_name='Sheet3')
-    # writer.save()  # <-- Elimina o comenta esta línea
 
     # Agregar fórmulas en Excel y formato de dos decimales
     wb = openpyxl.load_workbook(destino)
@@ -348,6 +377,7 @@ def convertir_excel(origen, destino):
 
     wb.save(destino)
     ajustar_formato_excel(destino)
+
 
 if __name__ == "__main__":
     app = App()
